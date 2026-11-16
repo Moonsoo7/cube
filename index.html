@@ -149,15 +149,18 @@ h2{font-size:34px}
 #btnUnlock[aria-pressed="true"]{background:var(--sun);color:var(--ink);border-style:solid;border-color:var(--sun)}
 #mapBar .ms{font-family:var(--display);font-size:15px;white-space:nowrap}
 #mapBar .ms b{font-weight:400;color:var(--sun);font-size:19px;font-variant-numeric:tabular-nums}
-#mapWrap{flex:1;min-height:0;overflow:auto;cursor:grab;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
-#map{position:relative;margin:0 auto}
-#mapCv{display:block}
+#mapWrap{position:relative;flex:1;min-height:0;overflow:hidden;cursor:grab;touch-action:none}
+#map{position:absolute;left:0;top:0;transform-origin:0 0}
+#mapCv{display:block;image-rendering:pixelated}
+#mapZoom{position:absolute;right:12px;bottom:12px;display:flex;flex-direction:column;gap:8px}
+#mapZoom button{width:40px;height:40px;background:var(--paper);border:3px solid var(--ink);box-shadow:3px 3px 0 var(--ink);font-family:var(--display);font-size:22px;line-height:1;padding:0}
 #mapFoot{flex:none;background:var(--paper);border-top:3px solid var(--ink);display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;
   padding:8px max(16px,env(safe-area-inset-right,0px)) calc(8px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
 #mapFoot .legend{flex:1 1 220px;margin:0;min-width:0;word-break:keep-all}
 #mapFoot .btn{flex:1 1 200px;font-size:17px;padding:9px 14px}
 /* 도시: 핀(잠김 🔒 · 진행 1/3 · 완료 ✓), 이름표, 그 위에 세워진 상징물 */
-.city{position:absolute;width:0;height:0}
+.city{position:absolute;width:0;height:0;transform:scale(var(--inv,1));transform-origin:0 0}
+.far .cname{display:none}
 .city .pin{position:absolute;left:-17px;top:-17px;width:34px;height:34px;border-radius:50%;border:3px solid var(--ink);background:#d6d9e3;
   box-shadow:2px 3px 0 var(--ink);font-family:var(--display);font-size:13px;padding:0;display:grid;place-items:center;line-height:1}
 .city.open .pin{background:var(--sun);animation:pinPulse 1.1s ease-in-out infinite alternate}
@@ -226,13 +229,13 @@ h2{font-size:34px}
     <div id="mapBar">
       <h1>큐브<b>게임</b></h1>
       <button id="btnUnlock" aria-pressed="false">🔓 모두 열기</button>
-      <span class="ms">상징물 <b id="mapProg">0/20</b></span>
+      <span class="ms">상징물 <b id="mapProg">0/100</b></span>
       <span class="ms">점수 <b id="menuScore">0</b></span>
       <button class="iconbtn snd" aria-label="소리 켜기/끄기">♪</button>
     </div>
-    <div id="mapWrap"><div id="map"><canvas id="mapCv"></canvas></div></div>
+    <div id="mapWrap"><div id="map"><canvas id="mapCv"></canvas></div><div id="mapZoom"><button id="mapZin" aria-label="지도 확대">＋</button><button id="mapZout" aria-label="지도 축소">－</button></div></div>
     <div id="mapFoot">
-      <p class="legend">도시를 눌러 상징물을 고르세요. 🔒 도시는 앞 도시의 상징물을 성공하면 열립니다. 지도는 밀어서 움직입니다.</p>
+      <p class="legend">도시를 눌러 상징물을 고르세요. 🔒 도시는 앞 도시의 상징물을 성공하면 열립니다. 지도는 밀어서 움직이고, 두 손가락으로 벌리거나 오므리면 확대·축소됩니다.</p>
       <button class="btn" id="btnPlay">시작</button>
     </div>
   </section>
@@ -263,6 +266,7 @@ h2{font-size:34px}
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="map.js"></script>
 <script src="config.js"></script>
 <script src="tune.js"></script>
 <script>
@@ -365,57 +369,246 @@ function mBasil(){var R='#c9503a',W='#f4efe6',v=new Vox().box(0,0,0,6,1,6,R);
   dome(1,1,3,'#3fae5a','#ffd84d');dome(5,1,3,'#2f6fd6','#f4efe6');dome(1,5,3,'#e0503a','#f4efe6');dome(5,5,3,'#ff8a3d','#3fae5a');
   v.box(2,2,2,4,5,4,R).box(3,6,3,3,8,3,W);dome(3,3,8,GD,'#e0503a');return v}
 
+/* ---------- 상징물 모델 2: 세계 100개로 늘리며 더한 모델 ---------- */
+// 도우미: cyl 원기둥, dome 반구, ball 공, pyr 한 층씩 줄어드는 사각뿔, col 한 칸 기둥
+Vox.prototype.cyl=function(cx,cz,r,y0,y1,c){var R=Math.ceil(r),x,z,y;for(x=-R;x<=R;x++)for(z=-R;z<=R;z++)if(x*x+z*z<=r*r)for(y=y0;y<=y1;y++)this.set(cx+x,y,cz+z,c);return this};
+Vox.prototype.dome=function(cx,y0,cz,r,c){for(var y=0;y<=r;y++)this.cyl(cx,cz,Math.sqrt(r*r-y*y),y0+y,y0+y,c);return this};
+Vox.prototype.ball=function(cx,cy,cz,r,c){var R=Math.ceil(r),x,y,z;for(x=-R;x<=R;x++)for(y=-R;y<=R;y++)for(z=-R;z<=R;z++)if(x*x+y*y+z*z<=r*r)this.set(cx+x,cy+y,cz+z,c);return this};
+Vox.prototype.pyr=function(x0,y0,z0,n,c){for(var k=0;n-2*k>0;k++)this.box(x0+k,y0+k,z0+k,x0+n-1-k,y0+k,z0+n-1-k,c);return this};
+Vox.prototype.col=function(x,z,y0,y1,c){return this.box(x,y0,z,x,y1,z,c)};
+var ST='#b9b2a6',SD='#d9c7a3',WT='#f4f1ea',GL='#8fc3e0',RF='#46536b',RR='#b5432e',GN='#5aa84f',DK='#3a3f4d',SV='#c9d3dc';
+function arch(v,x0,x1,y1,z0,z1){var x,y,z,m=(x0+x1)/2;for(x=x0;x<=x1;x++)for(y=0;y<=y1;y++)for(z=z0;z<=z1;z++)if(!(y===y1&&x!==m))v.del(x,y,z);return v} // 위가 뾰족한 문
+function mLiberty(){var T='#6fb7a6';return new Vox().box(0,0,0,4,2,4,'#b9c0c9').box(1,3,1,3,4,3,'#aab1ba').box(1,5,1,3,12,3,T)
+  .pts(T,[[1,13,2],[3,13,2],[2,13,1],[2,13,3],[2,13,2],[0,8,3],[0,7,3]]).box(4,9,2,4,13,2,T).set(4,14,2,GD).set(4,15,2,'#ff8a3d').pts(BK,[[1,11,3],[3,11,3]])}
+var MD={
+lotte:function(){var v=new Vox().box(-1,0,-1,3,0,3,ST).box(0,1,0,2,9,2,GL).cyl(1,1,1,10,12,GL);return v.pts(GL,[[0,13,1],[2,13,1]])},
+cheomseong:function(){return new Vox().cyl(2,2,2.3,0,2,SD).cyl(2,2,1.6,3,6,'#cfbb93').box(1,7,1,3,7,3,SD).set(2,4,3,DK)},
+dabo:function(){var v=new Vox().box(0,0,0,6,0,6,ST);[[1,1],[5,1],[1,5],[5,5],[3,3]].forEach(function(p){v.col(p[0],p[1],1,3,'#cfc8bb')});
+  v.box(0,4,0,6,4,6,ST).box(1,5,1,5,5,5,'#cfc8bb').box(2,6,2,4,7,4,ST).cyl(3,3,2.3,8,8,'#cfc8bb');return v.col(3,3,9,12,ST).set(3,13,3,GD)},
+skytree:function(){return new Vox().box(1,0,1,3,7,3,'#dfe6ee').col(2,2,8,13,'#dfe6ee').cyl(2,2,1.6,14,15,GL).col(2,2,16,21,WT)},
+fuji:function(){var v=new Vox(),y;for(y=0;y<5;y++)v.cyl(5,5,5-y,y,y,y>=3?WT:'#5b7fb5');return v},
+kinkaku:function(){return new Vox().box(0,0,0,6,0,4,ST).box(1,1,1,5,2,3,'#8a5a2b').box(0,3,0,6,3,4,RF).box(1,4,1,5,5,3,GD).box(1,6,0,5,6,4,RF)
+  .box(2,7,1,4,8,3,GD).box(1,9,0,5,9,4,RF).box(2,10,1,4,10,3,RF).set(3,11,2,GD)},
+osaka:function(){var T='#3f8f7a';return new Vox().box(0,0,0,8,1,8,ST).box(1,2,1,7,2,7,ST).box(2,3,2,6,4,6,WT).box(1,5,1,7,5,7,T).box(3,6,3,5,7,5,WT)
+  .box(2,8,2,6,8,6,T).box(3,9,3,5,9,5,WT).box(3,10,3,5,10,5,T).set(4,11,4,GD).pts(GD,[[2,8,2],[6,8,2],[2,8,6],[6,8,6]])},
+himeji:function(){var R='#6f7a8a';return new Vox().box(0,0,0,9,2,7,ST).box(2,3,1,7,5,6,WT).box(1,6,0,8,6,7,R).box(3,7,2,6,8,5,WT).box(2,9,1,7,9,6,R)
+  .box(3,10,2,6,11,5,WT).box(2,12,2,7,12,5,R).box(3,13,3,6,13,4,R).box(0,3,5,1,5,7,WT).box(0,7,5,1,7,7,R).box(8,3,0,9,4,2,WT).box(8,5,0,9,5,2,R)},
+taihe:function(){var Y='#e0a93a';return new Vox().box(0,0,0,10,0,6,WT).box(1,1,1,9,1,5,WT).box(2,2,1,8,4,5,RR).box(1,5,0,9,5,6,Y).box(2,6,1,8,6,5,RR)
+  .box(1,7,0,9,7,6,Y).box(2,8,1,8,8,5,Y).box(3,9,3,7,9,3,Y).pts(DK,[[5,2,5],[5,3,5]])},
+daqin:function(){var A='#c9a06a',B='#a8834f';return new Vox().box(0,0,0,4,3,4,A).box(0,3,0,4,3,4,B).box(1,4,1,3,7,3,A).box(1,7,1,3,7,3,B).box(2,8,2,2,9,2,A).set(2,10,2,DK).set(2,1,4,DK)},
+pearl:function(){var P='#d94f7a',v=new Vox().col(2,2,0,15,'#d8dde6').ball(2,4,2,2,P).ball(2,10,2,1.5,P).ball(2,13,2,1,P).col(2,2,15,18,WT);
+  return v.pts('#d8dde6',[[0,0,2],[1,1,2],[4,0,2],[3,1,2],[2,0,0],[2,1,1],[2,0,4],[2,1,3]])},
+taipei101:function(){var A='#5fae9a',B='#4a9483',v=new Vox().box(0,0,0,4,3,4,A),k;for(k=0;k<4;k++)v.box(1,4+k*2,1,3,4+k*2,3,A).box(0,5+k*2,0,4,5+k*2,4,B);
+  return v.box(1,12,1,3,13,3,A).col(2,2,14,17,SV)},
+onepillar:function(){return new Vox().box(0,0,0,4,0,4,'#7fcf74').col(2,2,1,3,ST).box(1,4,1,3,5,3,'#8a5a2b').box(0,6,0,4,6,4,'#a8402f').box(1,7,1,3,7,3,'#a8402f').set(2,8,2,GD)},
+angkor:function(){var A='#9c9485',B='#8a8273',v=new Vox().box(0,0,0,10,0,10,A).box(1,1,1,9,1,9,B).box(2,2,2,8,2,8,A);
+  [[2,2],[8,2],[2,8],[8,8]].forEach(function(p){v.col(p[0],p[1],3,5,B).set(p[0],6,p[1],A)});
+  v.box(2,3,2,8,3,2,B).box(2,3,8,8,3,8,B).box(2,3,2,2,3,8,B).box(8,3,2,8,3,8,B);
+  return v.box(4,3,4,6,6,6,A).col(5,5,7,10,B).pts(B,[[4,7,5],[6,7,5],[5,7,4],[5,7,6]]).set(5,11,5,GD)},
+petronas:function(){var v=new Vox();[0,6].forEach(function(x){v.box(x,0,0,x+2,9,2,SV).cyl(x+1,1,1,10,12,SV).col(x+1,1,13,16,'#dfe6ee')});
+  return v.box(3,5,1,5,5,1,'#8794a3').pts('#8794a3',[[3,4,1],[5,4,1]])},
+merlion:function(){var W='#6fbfe8';return new Vox().box(0,0,0,3,0,3,W).box(1,1,1,2,4,2,WT).pts(WT,[[1,1,0],[2,1,0],[2,2,0]]).box(1,5,1,2,6,3,WT)
+  .pts('#e3ddd0',[[0,5,1],[3,5,1],[0,6,1],[3,6,1],[1,7,1],[2,7,1],[1,7,2],[2,7,2]]).pts(DK,[[1,6,3],[2,6,3]]).pts(W,[[1,5,4],[1,4,5],[1,3,5],[1,2,5]])},
+mbs:function(){var v=new Vox();[0,4,8].forEach(function(x){v.box(x,0,0,x+1,8,2,GL)});return v.box(-1,9,0,11,9,2,'#d8dde6').pts(GN,[[2,10,1],[5,10,1],[8,10,1]])},
+borobudur:function(){var A='#8a8f84',v=new Vox().pyr(0,0,0,11,A);v.col(5,5,5,6,'#9aa093').set(5,7,5,ST);
+  [[3,3],[7,3],[3,7],[7,7]].forEach(function(p){v.set(p[0],4,p[1],'#9aa093')});return v},
+harbour:function(){var A='#6f7a8a',v=new Vox(),x,y;function f(x){return Math.round(8-x*x/5)}
+  for(x=-6;x<=6;x++){var t=f(x),lo=Math.min(t,f(Math.abs(x)+1)+1);if(Math.abs(x)===6)lo=2;[0,2].forEach(function(z){v.box(x,lo,z,x,t,z,A)});
+    if(x%2===0&&t>3)[0,2].forEach(function(z){v.col(x,z,3,lo-1,SV)})}
+  v.box(-8,2,0,8,2,2,'#8794a3');[-8,7].forEach(function(px){v.box(px,0,0,px+1,5,2,SD)});return v},
+opera:function(){var v=new Vox().box(0,0,0,11,1,6,'#c9a58a');function sail(x0,h,z0){for(var d=0;d<=h;d++)v.box(x0+d,2,z0,x0+d,2+h-d,z0+1,WT)}
+  sail(0,4,1);sail(3,6,1);sail(8,2,1);sail(1,3,4);sail(4,5,4);return v},
+boudha:function(){var v=new Vox().cyl(4,4,4.5,0,0,WT).dome(4,1,4,3.2,WT).box(3,4,3,5,5,5,GD).pts(DK,[[3,5,5],[5,5,5]]).col(4,4,6,9,GD);
+  return v.pts('#e0443c',[[1,1,4],[7,1,4]]).pts('#2f6fd6',[[4,1,1],[4,1,7]])},
+qutub:function(){var A='#b5673f',B='#e0b48a';return new Vox().cyl(2,2,2.3,0,3,A).cyl(2,2,2.3,3,3,B).cyl(2,2,1.6,4,8,A).cyl(2,2,1.6,8,8,B).cyl(2,2,1,9,12,A).cyl(2,2,1,12,12,B).col(2,2,13,14,A)},
+indiagate:function(){var v=arch(new Vox().box(0,0,0,6,7,2,SD),2,4,5,0,2);return v.box(1,8,0,5,8,2,'#cdb88f').box(2,9,1,4,9,1,SD)},
+gatewayindia:function(){var C='#d2b77c',v=arch(new Vox().box(0,0,0,8,6,3,C),3,5,4,0,3);[1,7].forEach(function(x){for(var z=0;z<=3;z++){v.del(x,0,z);v.del(x,1,z);v.del(x,2,z)}});
+  [[0,0],[8,0],[0,3],[8,3]].forEach(function(p){v.col(p[0],p[1],7,8,C).set(p[0],9,p[1],'#b89a5c')});return v.box(3,7,1,5,7,2,C).box(4,8,1,4,8,2,'#b89a5c')},
+registan:function(){var B='#2f7fb5',v=new Vox().box(2,0,3,6,5,7,SD).dome(4,6,5,2.5,'#3fa7b5');v.box(1,0,0,7,8,2,'#d9b98a');arch(v,3,5,5,0,2);
+  v.box(1,8,0,7,8,2,B).box(1,0,2,1,7,2,B).box(7,0,2,7,7,2,B);[0,8].forEach(function(x){v.col(x,1,0,9,SD).set(x,10,1,B)});return v},
+khalifa:function(){return new Vox().cyl(2,2,2.3,0,3,SV).cyl(2,2,1.6,4,8,'#b8c6d3').cyl(2,2,1,9,13,SV).col(2,2,14,20,'#dfe6ee')},
+alarab:function(){var v=new Vox(),y;for(y=0;y<=11;y++){var w=Math.round(5*Math.sqrt(1-y*y/144));v.box(0,y,0,w,y,2,WT);if(w>0)v.box(1,y,1,w,y,1,GL)}
+  return v.col(0,1,0,14,'#8794a3').pts('#8794a3',[[5,9,1],[6,9,1]])},
+khazneh:function(){var C='#c98a6a',D='#b5745a',v=new Vox().box(0,0,0,8,10,3,C),x,y;
+  for(x=1;x<=7;x++)for(y=0;y<=9;y++){var keep=(y<=3&&x%2===1)||y===4||(y>=5&&y<=7&&(x===1||x===7||x===4))||(y===8&&x>=2&&x<=6)||(y===9&&x===4);if(!keep)v.del(x,y,3);else v.set(x,y,3,D)}
+  return v.del(4,0,2).del(4,1,2)},
+galata:function(){var R='#5b6f8a';return new Vox().cyl(2,2,2.3,0,7,'#d8cdb8').cyl(2,2,2.3,8,8,DK).cyl(2,2,1.6,9,9,'#d8cdb8').cyl(2,2,2.3,10,10,R).cyl(2,2,1.6,11,11,R).cyl(2,2,1,12,12,R).col(2,2,13,14,R)},
+greatpyr:function(){return new Vox().pyr(0,0,0,9,'#e6c15f')},
+sphinx:function(){return new Vox().box(0,0,0,3,2,8,SD).box(0,0,9,0,1,11,SD).box(3,0,9,3,1,11,SD).box(0,3,6,3,4,8,SD).box(0,5,7,3,7,8,SD)
+  .pts('#c9b07a',[[-1,5,7],[4,5,7],[-1,6,7],[4,6,7],[-1,4,7],[4,4,7]]).pts(DK,[[1,6,8],[2,6,8]]).box(1,3,0,2,3,2,SD)},
+abusimbel:function(){var C='#c9955a',D='#b5804a',v=new Vox().box(0,0,0,10,8,3,C);[[0,8],[10,8],[0,7],[10,7]].forEach(function(p){for(var z=0;z<=3;z++)v.del(p[0],p[1],z)});
+  [0,3,6,9].forEach(function(x){v.box(x,0,4,x+1,4,4,D).box(x,5,4,x+1,5,4,C).box(x,0,5,x+1,1,5,D)});return v.del(5,0,3).del(5,1,3).del(5,2,3)},
+koutoubia:function(){var A='#d9a06a';return new Vox().box(0,0,0,2,9,2,A).box(0,8,0,2,8,2,'#3fa78a').pts(A,[[0,10,0],[2,10,0],[0,10,2],[2,10,2]]).col(1,1,10,12,A).set(1,13,1,GD)},
+table:function(){return new Vox().box(0,0,0,11,0,5,GN).box(1,1,1,10,2,4,'#8a8f84').box(2,3,1,9,3,4,'#9aa093').box(0,1,2,0,3,3,'#8a8f84').pts('#8a8f84',[[11,1,2],[11,2,2],[11,1,3]])},
+djenne:function(){var C='#c9925a',v=new Vox().box(0,0,0,10,4,5,C),x;[[2,6],[5,8],[8,6]].forEach(function(t){v.box(t[0]-1,0,6,t[0]+1,t[1],7,C).set(t[0],t[1]+1,6,C).pts(DK,[[t[0],2,8],[t[0],4,8]])});
+  for(x=0;x<=10;x+=2)v.set(x,5,0,C).set(x,5,5,C);return v},
+belem:function(){var C='#e6dcc6';return new Vox().box(0,0,0,4,2,6,C).box(0,3,0,4,8,3,C).pts(C,[[0,3,6],[4,3,6],[0,9,0],[4,9,0],[0,9,3],[4,9,3]]).box(1,9,1,3,10,2,C)
+  .pts('#cfc3a8',[[0,4,6],[4,4,6],[2,11,1]]).pts(DK,[[2,5,3],[2,1,6]])},
+aqueduct:function(){var C='#cdb89a',v=new Vox(),x;for(x=0;x<=12;x+=3){v.box(x,0,0,x,3,1,C).box(x,5,0,x,6,1,C);if(x>0)v.box(x-1,3,0,x-1,3,1,C);if(x<12)v.box(x+1,3,0,x+1,3,1,C)}
+  return v.box(0,4,0,12,4,1,C).box(0,7,0,12,7,1,C)},
+pisa:function(){var v=new Vox(),y;for(y=0;y<=7;y++)v.cyl(2+Math.floor(y/3),2,2.3,y,y,y%2?'#e3ddd0':WT);return v.cyl(4,2,1.6,8,9,WT)},
+pantheon:function(){var v=new Vox().cyl(4,4,4.2,0,4,'#cdb89a').dome(4,5,4,4.2,'#9a9a94');[1,3,5,7].forEach(function(x){v.col(x,10,0,3,WT)});
+  return v.box(1,0,9,7,3,9,'#cdb89a').box(1,4,8,7,4,10,WT).box(2,5,8,6,5,10,WT).box(3,6,8,5,6,10,WT)},
+stpeter:function(){var C='#e6dcc6',B='#8fa3b8',v=new Vox().box(0,0,0,10,4,8,C);[0,2,4,6,8,10].forEach(function(x){v.col(x,9,0,4,WT)});
+  return v.box(0,5,8,10,5,9,C).cyl(5,4,3.2,5,7,WT).dome(5,8,4,3.2,B).col(5,4,12,13,WT).set(5,14,4,GD).box(1,5,1,2,6,2,B).box(8,5,1,9,6,2,B)},
+rialto:function(){var v=new Vox(),x;for(x=-6;x<=6;x++){var a=Math.abs(x),top=4-Math.floor(a/2),un=a<=4?Math.round(3*(1-a*a/20)):0;v.box(x,Math.min(un,top),0,x,top,3,WT);
+    if(a>=1&&a<=5)v.box(x,top+1,0,x,top+2,3,'#e6dcc6')}return v.box(0,5,0,0,7,3,WT)},
+ststephen:function(){var Y='#d9b23a',T='#3f8f7a',S2='#b8b0a0';return new Vox().box(0,0,0,4,5,10,S2).box(0,6,0,4,6,10,Y).box(1,7,0,3,7,10,T).box(2,8,0,2,8,10,Y)
+  .box(5,0,3,7,9,5,S2).col(6,4,10,16,S2).pts(S2,[[5,10,3],[7,10,3],[5,10,5],[7,10,5]]).box(0,0,11,1,7,11,S2).box(3,0,11,4,7,11,S2).pts(T,[[0,8,11],[4,8,11]])},
+parliament:function(){var C='#e6dcc6',R='#a8402f',v=new Vox().box(0,0,0,14,4,4,C).box(0,5,1,14,5,3,R).box(5,5,0,9,7,4,C).dome(7,8,2,2.6,R).col(7,2,11,14,R);
+  [0,2,4,10,12,14].forEach(function(x){v.col(x,0,5,7,WT).col(x,4,5,7,WT)});return v},
+spasskaya:function(){var T='#2f7a55';return new Vox().box(0,0,0,4,6,4,RR).box(0,7,0,4,7,4,WT).box(1,8,1,3,11,3,RR).set(2,9,3,GD).box(1,12,1,3,12,3,T).col(2,2,13,16,T).set(2,17,2,'#e0443c').pts(DK,[[2,0,4],[2,1,4]])},
+tvtower:function(){var v=new Vox().box(1,0,1,3,1,3,SV).col(2,2,2,10,'#b8c2cf').ball(2,12,2,2.3,'#dfe6ee'),y;for(y=15;y<=20;y++)v.set(2,y,2,y%2?WT:'#e0443c');return v},
+brandenburg:function(){var v=new Vox();[0,2,4,6,8,10].forEach(function(x){v.box(x,0,0,x,5,2,SD)});return v.box(0,6,0,10,7,2,SD).box(4,8,1,6,8,1,'#3f8f7a').pts('#3f8f7a',[[4,9,1],[5,9,1],[6,9,1],[5,10,1]])},
+neuschwanstein:function(){var B='#3d5a8a';return new Vox().box(0,0,0,11,1,5,'#8a8f84').box(2,2,1,9,7,4,WT).box(2,8,1,9,8,4,B).box(2,9,2,9,9,3,B)
+  .box(0,2,3,1,12,4,WT).box(0,13,3,1,13,4,B).set(0,14,3,B).box(10,2,1,11,9,2,WT).box(10,10,1,11,10,2,B).set(10,11,1,B).box(9,2,3,11,4,5,'#b5673f').box(9,5,3,11,5,5,B)
+  .pts(DK,[[4,4,4],[6,4,4],[8,4,4],[4,6,4],[6,6,4],[8,6,4]])},
+cologne:function(){var C='#6f6a66',D='#5b5754',v=new Vox().box(0,0,0,4,6,10,C).box(1,7,0,3,7,10,D).box(2,8,0,2,8,10,D).box(-2,0,4,6,5,6,C).col(2,5,9,11,D);
+  [0,3].forEach(function(x){v.box(x,0,11,x+1,10,12,C).box(x,11,11,x+1,12,11,D)});return v.col(0,11,13,16,D).col(4,11,13,16,D)},
+atomium:function(){var v=new Vox(),P=[0,8],a,b,i;P.forEach(function(x){P.forEach(function(y){P.forEach(function(z){v.ball(x,y+1,z,1.2,SV);for(i=1;i<4;i++)v.set(x<4?x+i:x-i,(y<4?y+i:y-i)+1,z<4?z+i:z-i,'#aab6c2')})})});
+  for(i=2;i<=6;i++)P.forEach(function(p){P.forEach(function(q){v.set(i,p+1,q,'#aab6c2').set(p,i+1,q,'#aab6c2').set(p,q+1,i,'#aab6c2')})});return v.ball(4,5,4,1.2,SV)},
+louvre:function(){return new Vox().box(0,0,0,8,0,8,'#d8dde6').pyr(1,1,1,7,GL)},
+notredame:function(){var C='#d8cdb8',R='#6f7a8a',v=new Vox().box(1,0,0,5,6,12,C).box(2,7,0,4,7,12,R).box(3,8,0,3,8,12,R).box(-1,0,5,7,6,7,C);
+  v.box(0,0,13,2,10,15,C).box(4,0,13,6,10,15,C).box(3,0,13,3,7,15,C).set(3,5,15,'#7a4de0').col(3,6,9,13,R);[2,10].forEach(function(z){v.box(0,0,z,0,3,z,C).box(6,0,z,6,3,z,C)});return v},
+montstmichel:function(){return new Vox().cyl(5,5,5,0,0,'#8a8f84').cyl(5,5,4,1,1,'#9aa093').cyl(5,5,3.2,2,2,'#d8cdb8').cyl(5,5,2.3,3,4,'#cdb89a').box(4,5,4,6,7,6,'#cfc3a8')
+  .box(4,8,5,6,8,5,'#6f7a8a').col(5,5,8,13,'#6f7a8a').set(5,14,5,GD).pts('#a8402f',[[2,3,5],[8,3,5],[5,3,2],[5,3,8]])},
+stonehenge:function(){var v=new Vox().cyl(4,4,4.5,-1,-1,'#7fcf74');[[1,3],[1,5],[3,1],[5,1],[7,3],[7,5],[3,7],[5,7]].forEach(function(p){v.col(p[0],p[1],0,2,ST)});
+  return v.box(1,3,3,1,3,5,'#a8a196').box(3,3,1,5,3,1,'#a8a196').box(7,3,3,7,3,5,'#a8a196').box(3,3,7,5,3,7,'#a8a196').col(3,4,0,1,ST).col(5,4,0,1,ST).set(4,0,3,ST)},
+eye:function(){var v=new Vox(),x,y,i;for(x=0;x<=10;x++)for(y=1;y<=11;y++){var d=Math.sqrt((x-5)*(x-5)+(y-6)*(y-6));if(Math.abs(d-5)<.6)v.set(x,y,1,WT);else if(d<4.5&&(x===5||y===6||Math.abs(x-5)===Math.abs(y-6)))v.set(x,y,1,SV)}
+  [[5,12],[5,0],[-1,6],[11,6],[1,10],[9,10],[1,2],[9,2]].forEach(function(p){v.set(p[0],p[1],1,GL)});
+  for(i=1;i<=6;i++){v.set(5-Math.ceil(i/2),6-i,0,'#8794a3');v.set(5+Math.ceil(i/2),6-i,0,'#8794a3')}return v.box(1,-1,0,9,-1,2,ST)},
+hallgrim:function(){var C='#d8d5cc',v=new Vox(),x;for(x=-5;x<=5;x++)v.box(x,0,0,x,Math.max(2,14-2*Math.abs(x)),1,C);return v.box(-2,0,2,2,5,9,C).box(-1,6,2,1,6,9,'#8a8f84').set(0,15,0,DK)},
+peace:function(){var C='#c9b89a',T='#4f8f7a';return new Vox().box(0,0,0,10,3,3,C).box(0,4,0,10,4,3,T).box(4,0,2,6,10,4,C).set(5,9,4,WT).box(4,11,2,6,11,4,T).col(5,3,12,14,T).pts(T,[[0,5,1],[10,5,1]])},
+cn:function(){return new Vox().cyl(2,2,1.6,0,1,'#b8c2cf').col(2,2,2,8,'#b8c2cf').cyl(2,2,2.3,9,10,'#dfe6ee').cyl(2,2,1.6,11,11,'#e0443c').col(2,2,12,18,WT)},
+empire:function(){return new Vox().box(0,0,0,4,2,4,ST).box(1,3,1,3,10,3,'#cfc8bb').cyl(2,2,1,11,11,ST).col(2,2,12,16,SV)},
+brooklyn:function(){var C='#b89a7a',A='#8794a3',v=new Vox().box(-4,2,0,15,2,4,'#6f7a8a'),x,y;[0,10].forEach(function(tx){v.box(tx,0,0,tx+1,9,4,C);for(y=3;y<=6;y++)[1,3].forEach(function(z){v.del(tx,y,z).del(tx+1,y,z)})});
+  for(x=2;x<=9;x++){var t=(x-5.5)/3.5;y=Math.round(4+5*t*t);v.set(x,y,0,A).set(x,y,4,A)}
+  for(x=1;x<=4;x++){y=9-Math.round(x*1.5);v.set(-x,y,0,A).set(-x,y,4,A).set(11+x,y,0,A).set(11+x,y,4,A)}return v},
+washington:function(){return new Vox().box(-1,0,-1,3,0,3,'#cfc8bb').box(0,1,0,2,10,2,WT).set(1,11,1,WT)},
+lincoln:function(){var v=new Vox().box(0,0,0,10,0,6,WT).box(1,1,1,9,1,5,WT);[1,3,5,7,9].forEach(function(x){v.col(x,1,2,5,WT).col(x,5,2,5,WT)});
+  return v.col(1,3,2,5,WT).col(9,3,2,5,WT).box(2,2,2,8,5,4,'#e3ddd0').box(1,6,1,9,6,5,WT).box(2,7,2,8,7,4,WT).pts(DK,[[5,2,4],[5,3,4]])},
+capitol:function(){var v=new Vox().box(0,0,0,14,3,4,WT).box(5,0,-1,9,4,5,WT).box(6,0,6,8,0,6,'#e3ddd0');[6,8].forEach(function(x){v.col(x,6,1,3,WT)});
+  return v.box(6,4,6,8,4,6,WT).cyl(7,2,2.6,5,7,WT).dome(7,8,2,2.6,'#e9edf2').col(7,2,11,12,WT).set(7,13,2,'#8a8f84').box(0,4,1,3,4,3,'#e3ddd0').box(11,4,1,14,4,3,'#e3ddd0')},
+willis:function(){var D='#2a2f3d';return new Vox().box(0,0,0,2,5,2,D).box(0,6,0,1,9,2,D).box(0,10,0,1,12,1,D).col(0,0,13,16,WT).col(1,1,13,15,WT)},
+gatearch:function(){var v=new Vox(),x;function f(a){return a>5?-1:Math.round(11*(1-Math.pow(a/5.6,2)))}for(x=-5;x<=5;x++){var a=Math.abs(x),t=f(a);v.box(x,Math.max(0,Math.min(t,f(a+1))),0,x,t,1,SV)}return v},
+needle:function(){var O='#ff8a3d';return new Vox().col(2,2,0,9,WT).pts(WT,[[0,0,2],[4,0,2],[2,0,0],[2,0,4],[1,1,2],[3,1,2],[2,1,1],[2,1,3],[1,8,2],[3,8,2],[2,8,1],[2,8,3]])
+  .cyl(2,2,2.6,9,9,'#dfe6ee').cyl(2,2,2.3,10,10,O).cyl(2,2,1.6,11,11,'#dfe6ee').col(2,2,12,15,SV)},
+goldengate:function(){var R='#c8402f',v=new Vox().box(-5,3,0,17,3,3,R),x,y,i;[0,12].forEach(function(tx){v.col(tx,0,0,12,R).col(tx,3,0,12,R);[4,7,10,12].forEach(function(by){v.box(tx,by,0,tx,by,3,R)})});
+  for(x=1;x<=11;x++){var t=(x-6)/6;y=Math.round(4+8*t*t);[0,3].forEach(function(z){v.set(x,y,z,R);if(x%2===0&&y>4)v.col(x,z,4,y-1,'#e0705f')})}
+  for(i=1;i<=5;i++){y=12-Math.round(i*1.6);[0,3].forEach(function(z){v.set(-i,y,z,R).set(12+i,y,z,R)})}return v},
+griffith:function(){return new Vox().box(0,0,0,10,0,6,'#8aa86a').box(1,1,1,9,3,5,WT).dome(5,4,3,2.3,DK).dome(2,4,3,1.6,DK).dome(8,4,3,1.6,DK).pts(DK,[[5,1,5],[5,2,5]])},
+sunpyr:function(){var C='#b89a6a',L='#d2b88a',v=new Vox().box(0,0,0,8,0,8,C).box(1,1,1,7,1,7,C).box(2,2,2,6,2,6,C).box(3,3,3,5,3,5,C);return v.pts(L,[[4,0,8],[4,1,7],[4,2,6],[4,3,5]])},
+angel:function(){return new Vox().box(0,0,0,4,1,4,WT).box(1,2,1,3,2,3,'#e3ddd0').col(2,2,3,11,WT).cyl(2,2,1,12,12,'#e3ddd0').col(2,2,13,14,GD).pts(GD,[[1,14,2],[3,14,2],[2,15,2]])},
+castillo:function(){var C='#cfc3a8',L='#e3d9bf',v=new Vox().box(0,0,0,8,1,8,C).box(1,2,1,7,3,7,C).box(2,4,2,6,5,6,C).box(3,6,3,5,7,5,'#b8ab8f');
+  [[4,-1],[4,9],[-1,4],[9,4]].forEach(function(p){v.box(p[0],0,p[1],p[0],1,p[1],L)});return v.pts(L,[[4,2,0],[4,3,0],[4,2,8],[4,3,8],[0,2,4],[0,3,4],[8,2,4],[8,3,4],[4,4,1],[4,5,1],[4,4,7],[4,5,7]]).set(4,6,5,DK)},
+equator:function(){return new Vox().box(0,0,0,4,1,4,ST).box(1,2,1,3,8,3,'#b8a58a').ball(2,10,2,1.6,'#8fa3b8').pts(GD,[[2,0,5],[2,0,6],[2,0,-1],[2,0,-2]])},
+machu:function(){var T='#6fae5a',H='#b9b2a6',P='#4f8f4a',v=new Vox().box(0,0,0,12,0,9,GN).box(0,1,0,10,1,8,T).box(0,2,0,8,2,7,'#7fbf6a').box(0,3,1,6,3,6,T);
+  v.box(1,4,2,2,5,3,H).box(4,4,2,5,5,3,H).box(1,4,5,2,4,6,H).box(4,4,5,5,4,6,H).box(7,3,1,8,3,2,H).box(7,3,5,8,4,6,H);
+  return v.cyl(10,3,2.6,1,3,P).cyl(10,3,2,4,6,P).cyl(10,3,1.2,7,9,P).set(10,10,3,P)},
+gatesun:function(){var C='#9c9485',v=new Vox().box(0,0,0,5,4,1,C),x,y;for(x=2;x<=3;x++)for(y=0;y<=2;y++){v.del(x,y,0);v.del(x,y,1)}return v.pts('#b9b2a6',[[0,4,1],[1,4,1],[2,4,1],[3,4,1],[4,4,1],[5,4,1]]).set(2,3,1,DK).set(3,3,1,DK)},
+moai:function(){var C='#6f6a66';return new Vox().box(0,0,0,4,0,2,'#8a8f84').box(1,1,0,3,3,1,C).box(1,4,0,3,7,1,C).box(1,7,2,3,7,2,C).col(2,2,4,6,C).pts(DK,[[1,6,2],[3,6,2]]).box(1,8,0,3,8,1,RR)},
+obelisk:function(){return new Vox().box(0,0,0,4,0,4,'#cfc8bb').box(1,1,1,3,2,3,'#e3ddd0').col(2,2,3,12,WT)},
+sugarloaf:function(){var v=new Vox(),y;for(y=0;y<8;y++)v.cyl(3,3,3.2*Math.sqrt(1-y*y/64),y,y,y<2?'#4f8f4a':'#8a8f84');v.dome(9,0,3,2.3,'#4f8f4a');return v.pts(DK,[[5,6,3],[6,5,3],[7,4,3],[8,3,3]])},
+redeemer:function(){return new Vox().cyl(3,3,3.2,0,1,'#4f8f4a').cyl(3,3,2.3,2,2,'#5aa84f').box(2,3,2,4,5,4,'#8a8f84').box(2,6,3,4,9,3,WT).col(3,3,6,12,WT).box(-1,10,3,7,10,3,WT)},
+maracana:function(){var v=new Vox(),x,z,y;for(x=-6;x<=6;x++)for(z=-5;z<=5;z++){var o=x*x/38+z*z/22,n=x*x/14+z*z/6;if(o>1)continue;if(n<=1){v.set(x,0,z,'#5aa84f');continue}
+    var h=o>.7?3:o>.45?2:1;for(y=0;y<=h;y++)v.set(x,y,z,y===h&&h===3?WT:y%2?'#8fa3b8':'#cfd6de')}return v},
+brasilia:function(){var v=new Vox().cyl(5,5,2,0,5,GL),R=[5,4.2,3.4,2.8,2.4,2.4,2.8,3.4],a,y;for(a=0;a<12;a++)for(y=0;y<8;y++)v.set(Math.round(5+R[y]*Math.cos(a*.5236)),y,Math.round(5+R[y]*Math.sin(a*.5236)),WT);return v}
+};
+
 /* ---------- 도시와 상징물 ---------- */
-// 도시는 정복해 가는 순서: 서울에서 출발해 일본, 아시아를 거쳐 유럽으로. dx·dy는 지도에서 겹치지 않게 살짝 옮기는 양(칸 단위)
-var CITIES=[
- {name:'서울',country:'대한민국',lon:127,lat:37.5},
- {name:'도쿄',country:'일본',lon:139.7,lat:35.7,dx:.4},
- {name:'베이징',country:'중국',lon:116.4,lat:39.9,dx:-1,dy:-.4},
- {name:'방콕',country:'태국',lon:100.5,lat:13.7,dy:-.3},
- {name:'아그라',country:'인도',lon:78,lat:27.2},
- {name:'이스탄불',country:'튀르키예',lon:29,lat:41},
- {name:'아테네',country:'그리스',lon:23.7,lat:38,dy:.2},
- {name:'로마',country:'이탈리아',lon:12.5,lat:41.9},
- {name:'바르셀로나',country:'스페인',lon:2.2,lat:41.4},
- {name:'파리',country:'프랑스',lon:2.3,lat:48.9},
- {name:'암스테르담',country:'네덜란드',lon:4.9,lat:52.4,dx:.6},
- {name:'런던',country:'영국',lon:-.1,lat:51.5,dx:-1.2},
- {name:'모스크바',country:'러시아',lon:37.6,lat:55.7}];
-// [저장 이름, 상징물, 도시 번호, 레벨(1 아주 쉬움 ~ 10 아주 어려움), 모델, 방식, 배경]
-// 레벨마다 상징물 2개. 방식: bomb 폭탄 · memory 기억 · regrow 재생 · chain 지뢰찾기식 연쇄
-var STAGES=[
- ['sungnye','숭례문',0,1,mSungnye,'','sky'],
- ['nseoul','N서울타워',0,2,mTower,'','dusk'],
- ['gyeongbok','경복궁 근정전',0,3,mGyeongbok,'memory','dawn'],
- ['torii','도리이',1,1,mTorii,'','mint'],
- ['tokyot','도쿄타워',1,2,mTokyoT,'bomb','sky'],
- ['goju','센소지 오층탑',1,4,mGoju,'bomb','candy'],
- ['wall','만리장성',2,3,mWall,'regrow','sand'],
- ['heaven','천단',2,5,mHeaven,'chain','sky'],
- ['watarun','왓 아룬',3,4,mWatArun,'memory','dawn'],
- ['taj','타지마할',4,5,mTaj,'regrow','dawn'],
- ['hagia','아야 소피아',5,6,mHagia,'bomb+regrow','dusk'],
- ['parthenon','파르테논 신전',6,6,mParthenon,'memory','sea'],
- ['colosseum','콜로세움',7,7,mColosseum,'chain','sand'],
- ['sagrada','사그라다 파밀리아',8,7,mSagrada,'memory+bomb','sky'],
- ['arc','개선문',9,8,mArc,'regrow+bomb','mint'],
- ['eiffel','에펠탑',9,8,mEiffel,'regrow+memory','dusk'],
- ['windmill','풍차',10,9,mWindmill,'chain','sea'],
- ['bigben','빅벤',11,9,mBigBen,'bomb+memory','night'],
- ['towerbridge','타워 브리지',11,10,mTowerBridge,'regrow+bomb','sea'],
- ['basil','성 바실리 대성당',12,10,mBasil,'memory+regrow','night']
-].map(function(d){var L=d[3],chain=d[5]==='chain';
-  return {id:d[0],name:d[1],city:d[2],level:L,build:d[4],theme:d[6],chain:chain,modes:chain||!d[5]?null:d[5].split('+'),
-    // 레벨 1은 없앨 큐브가 회색, 2~3은 정답보다 조금 어두운 색, 4부터는 정답과 같은 색
-    decoy:L===1?'#9aa3ad':null,dl:L===2?.15:L===3?.08:0,
-    layers:chain?[.45,.7,.35]:L<=2?[.5]:L<=4?[.45,.18]:L<=7?[.45,.22]:[.5,.25,.08],
-    want:(10+L*6)*(chain?2.5:1)}}); // want: 없앨 큐브 수의 목표(레벨 1은 16개쯤, 10은 70개쯤)
+// 도시는 정복해 가는 순서: 서울에서 출발해 일본·아시아·오세아니아, 중동·아프리카, 유럽, 북아메리카, 남아메리카로 간다
+// [도시, 나라, 경도, 위도, [[저장 이름, 상징물, 레벨, 모델], …]]  레벨은 1(아주 쉬움)~10(아주 어려움), 레벨마다 상징물 10개
+var WORLD=[
+ ['서울','대한민국',127,37.5,[['sungnye','숭례문',1,mSungnye],['nseoul','N서울타워',2,mTower],['gyeongbok','경복궁 근정전',4,mGyeongbok],['lotte','롯데월드타워',5,MD.lotte]]],
+ ['경주','대한민국',129.2,35.8,[['cheomseong','첨성대',1,MD.cheomseong],['dabo','불국사 다보탑',7,MD.dabo]]],
+ ['도쿄','일본',139.7,35.7,[['torii','도리이',1,mTorii],['tokyot','도쿄타워',2,mTokyoT],['skytree','도쿄 스카이트리',3,MD.skytree],['goju','센소지 오층탑',5,mGoju]]],
+ ['시즈오카','일본',138.7,35.4,[['fuji','후지산',1,MD.fuji]]],
+ ['교토','일본',135.8,35,[['kinkaku','금각사',4,MD.kinkaku]]],
+ ['오사카','일본',135.5,34.7,[['osaka','오사카성',7,MD.osaka]]],
+ ['히메지','일본',134.7,34.8,[['himeji','히메지성',9,MD.himeji]]],
+ ['베이징','중국',116.4,39.9,[['wall','만리장성',4,mWall],['heaven','천단',6,mHeaven],['taihe','자금성 태화전',7,MD.taihe]]],
+ ['시안','중국',108.9,34.3,[['daqin','대안탑',2,MD.daqin]]],
+ ['상하이','중국',121.5,31.2,[['pearl','동방명주',4,MD.pearl]]],
+ ['타이베이','대만',121.5,25,[['taipei101','타이베이 101',5,MD.taipei101]]],
+ ['하노이','베트남',105.8,21,[['onepillar','한기둥 사원',1,MD.onepillar]]],
+ ['시엠레아프','캄보디아',103.9,13.4,[['angkor','앙코르와트',9,MD.angkor]]],
+ ['방콕','태국',100.5,13.7,[['watarun','왓 아룬',5,mWatArun]]],
+ ['쿠알라룸푸르','말레이시아',101.7,3.1,[['petronas','페트로나스 트윈타워',7,MD.petronas]]],
+ ['싱가포르','싱가포르',103.8,1.3,[['merlion','머라이언',4,MD.merlion],['mbs','마리나베이 샌즈',6,MD.mbs]]],
+ ['족자카르타','인도네시아',110.4,-7.8,[['borobudur','보로부두르',8,MD.borobudur]]],
+ ['시드니','호주',151.2,-33.9,[['harbour','하버 브리지',6,MD.harbour],['opera','오페라하우스',8,MD.opera]]],
+ ['카트만두','네팔',85.3,27.7,[['boudha','보다나트 스투파',4,MD.boudha]]],
+ ['델리','인도',77.2,28.6,[['qutub','쿠툽 미나르',2,MD.qutub],['indiagate','인디아 게이트',4,MD.indiagate]]],
+ ['아그라','인도',78,27.2,[['taj','타지마할',6,mTaj]]],
+ ['뭄바이','인도',72.9,19.1,[['gatewayindia','게이트웨이 오브 인디아',6,MD.gatewayindia]]],
+ ['사마르칸트','우즈베키스탄',67,39.7,[['registan','레기스탄',8,MD.registan]]],
+ ['두바이','아랍에미리트',55.3,25.2,[['khalifa','부르즈 할리파',3,MD.khalifa],['alarab','부르즈 알 아랍',5,MD.alarab]]],
+ ['페트라','요르단',35.4,30.3,[['khazneh','알카즈네',7,MD.khazneh]]],
+ ['이스탄불','튀르키예',29,41,[['galata','갈라타 탑',3,MD.galata],['hagia','아야 소피아',7,mHagia]]],
+ ['아테네','그리스',23.7,38,[['parthenon','파르테논 신전',7,mParthenon]]],
+ ['기자','이집트',31.1,30,[['greatpyr','대피라미드',1,MD.greatpyr],['sphinx','스핑크스',5,MD.sphinx]]],
+ ['아부심벨','이집트',31.6,22.3,[['abusimbel','아부심벨 신전',8,MD.abusimbel]]],
+ ['케이프타운','남아프리카 공화국',18.4,-33.9,[['table','테이블 마운틴',2,MD.table]]],
+ ['젠네','말리',-4.6,13.9,[['djenne','젠네 대모스크',9,MD.djenne]]],
+ ['마라케시','모로코',-8,31.6,[['koutoubia','쿠투비아 탑',2,MD.koutoubia]]],
+ ['리스본','포르투갈',-9.1,38.7,[['belem','벨렝 탑',6,MD.belem]]],
+ ['세고비아','스페인',-4.1,41,[['aqueduct','세고비아 수도교',4,MD.aqueduct]]],
+ ['바르셀로나','스페인',2.2,41.4,[['sagrada','사그라다 파밀리아',8,mSagrada]]],
+ ['피사','이탈리아',10.4,43.7,[['pisa','피사의 사탑',3,MD.pisa]]],
+ ['로마','이탈리아',12.5,41.9,[['pantheon','판테온',6,MD.pantheon],['colosseum','콜로세움',8,mColosseum],['stpeter','성 베드로 대성당',10,MD.stpeter]]],
+ ['베네치아','이탈리아',12.3,45.4,[['rialto','리알토 다리',5,MD.rialto]]],
+ ['빈','오스트리아',16.4,48.2,[['ststephen','슈테판 대성당',9,MD.ststephen]]],
+ ['부다페스트','헝가리',19,47.5,[['parliament','헝가리 국회의사당',10,MD.parliament]]],
+ ['모스크바','러시아',37.6,55.7,[['spasskaya','크렘린 스파스카야 탑',8,MD.spasskaya],['basil','성 바실리 대성당',10,mBasil]]],
+ ['베를린','독일',13.4,52.5,[['tvtower','베를린 TV탑',3,MD.tvtower],['brandenburg','브란덴부르크 문',4,MD.brandenburg]]],
+ ['퓌센','독일',10.7,47.6,[['neuschwanstein','노이슈반슈타인 성',10,MD.neuschwanstein]]],
+ ['쾰른','독일',7,50.9,[['cologne','쾰른 대성당',10,MD.cologne]]],
+ ['브뤼셀','벨기에',4.4,50.8,[['atomium','아토미움',7,MD.atomium]]],
+ ['암스테르담','네덜란드',4.9,52.4,[['windmill','풍차',9,mWindmill]]],
+ ['파리','프랑스',2.3,48.9,[['louvre','루브르 피라미드',1,MD.louvre],['arc','개선문',8,mArc],['eiffel','에펠탑',9,mEiffel],['notredame','노트르담 대성당',10,MD.notredame]]],
+ ['몽생미셸','프랑스',-1.5,48.6,[['montstmichel','몽생미셸',10,MD.montstmichel]]],
+ ['솔즈베리','영국',-1.8,51.2,[['stonehenge','스톤헨지',2,MD.stonehenge]]],
+ ['런던','영국',-.1,51.5,[['eye','런던 아이',6,MD.eye],['bigben','빅벤',9,mBigBen],['towerbridge','타워 브리지',10,mTowerBridge]]],
+ ['레이캬비크','아이슬란드',-21.9,64.1,[['hallgrim','할그림스키르캬',7,MD.hallgrim]]],
+ ['오타와','캐나다',-75.7,45.4,[['peace','평화의 탑',6,MD.peace]]],
+ ['토론토','캐나다',-79.4,43.7,[['cn','CN 타워',2,MD.cn]]],
+ ['뉴욕','미국',-74,40.7,[['empire','엠파이어 스테이트 빌딩',4,MD.empire],['liberty','자유의 여신상',8,mLiberty],['brooklyn','브루클린 브리지',9,MD.brooklyn]]],
+ ['워싱턴','미국',-77,38.9,[['washington','워싱턴 기념탑',1,MD.washington],['lincoln','링컨 기념관',5,MD.lincoln],['capitol','미국 국회의사당',10,MD.capitol]]],
+ ['시카고','미국',-87.6,41.9,[['willis','윌리스 타워',3,MD.willis]]],
+ ['세인트루이스','미국',-90.2,38.6,[['gatearch','게이트웨이 아치',3,MD.gatearch]]],
+ ['시애틀','미국',-122.3,47.6,[['needle','스페이스 니들',5,MD.needle]]],
+ ['샌프란시스코','미국',-122.4,37.8,[['goldengate','금문교',9,MD.goldengate]]],
+ ['로스앤젤레스','미국',-118.2,34.1,[['griffith','그리피스 천문대',6,MD.griffith]]],
+ ['멕시코시티','멕시코',-99.1,19.4,[['sunpyr','태양의 피라미드',2,MD.sunpyr],['angel','독립기념탑',3,MD.angel]]],
+ ['치첸이트사','멕시코',-88.6,20.7,[['castillo','엘 카스티요',5,MD.castillo]]],
+ ['키토','에콰도르',-78.5,-.2,[['equator','적도 기념비',2,MD.equator]]],
+ ['마추픽추','페루',-72.5,-13.2,[['machu','마추픽추',10,MD.machu]]],
+ ['티와나쿠','볼리비아',-68.7,-16.6,[['gatesun','태양의 문',1,MD.gatesun]]],
+ ['이스터섬','칠레',-109.4,-27.1,[['moai','모아이',3,MD.moai]]],
+ ['부에노스아이레스','아르헨티나',-58.4,-34.6,[['obelisk','오벨리스크',1,MD.obelisk]]],
+ ['리우데자네이루','브라질',-43.2,-22.9,[['sugarloaf','슈가로프산',3,MD.sugarloaf],['redeemer','구세주 그리스도상',7,MD.redeemer],['maracana','마라카낭 경기장',8,MD.maracana]]],
+ ['브라질리아','브라질',-47.9,-15.8,[['brasilia','브라질리아 대성당',9,MD.brasilia]]]];
+var CITIES=[],STAGES=[],BYCITY=[];
+// 방식은 레벨에 따라 돌아가며 붙는다: 1은 기본, 2는 가끔 폭탄, 3부터 기억·재생·폭탄·연쇄, 6부터 두 방식이 겹침
+var MODE_CYCLE={2:['','','bomb'],3:['memory','regrow','bomb','','chain'],4:['bomb','memory','regrow','chain','regrow'],5:['memory','bomb','chain','regrow','memory'],
+  6:['bomb+regrow','memory','chain','regrow+bomb','memory+bomb'],7:['memory','regrow+bomb','chain','bomb+memory','bomb+regrow'],
+  8:['regrow+bomb','regrow+memory','chain','bomb+memory','memory+regrow'],9:['regrow+memory','chain','bomb+memory','regrow+bomb','memory+regrow'],
+  10:['regrow+bomb','memory+regrow','chain','bomb+memory','regrow+memory']};
+var TH=['sky','dawn','mint','candy','sea','dusk','sand','night'];
+(function(){var seenLv={};
+  WORLD.forEach(function(w,ci){CITIES.push({name:w[0],country:w[1],lon:w[2],lat:w[3]});BYCITY.push([]);
+    w[4].forEach(function(d){var L=d[2],k=seenLv[L]=(seenLv[L]||0)+1,cyc=MODE_CYCLE[L],md=cyc?cyc[(k-1)%cyc.length]:'',chain=md==='chain';
+      BYCITY[ci].push(STAGES.length);
+      STAGES.push({id:d[0],name:d[1],city:ci,level:L,build:d[3],theme:TH[STAGES.length%TH.length],chain:chain,modes:chain||!md?null:md.split('+'),
+        // 레벨 1은 없앨 큐브가 회색, 2~3은 정답보다 조금 어두운 색, 4부터는 정답과 같은 색
+        decoy:L===1?'#9aa3ad':null,dl:L===2?.15:L===3?.08:0,
+        layers:chain?[.45,.7,.35]:L<=2?[.5]:L<=4?[.45,.18]:L<=7?[.45,.22]:[.5,.25,.08],
+        want:(10+L*6)*(chain?2.5:1)})})})})(); // want: 없앨 큐브 수의 목표(레벨 1은 16개쯤, 10은 70개쯤)
 var MODE_NAME={bomb:'폭탄',memory:'기억',regrow:'재생'};
 function M(c,m){return !!c.modes&&c.modes.indexOf(m)>=0}
 function modeLabel(c){return c.chain?'연쇄':c.modes?c.modes.map(function(m){return MODE_NAME[m]}).join('+'):''}
 // 방식을 처음 만나는 판에서는 그 방식의 설명을 먼저 보여 준다
 (function(){var seen={};STAGES.forEach(function(s){var k=s.chain?'chain':!s.modes?'':s.modes.length>1?'combo':s.modes[0];if(k&&!seen[k]){seen[k]=1;s.intro=true}})})();
-var BYCITY=CITIES.map(function(){return []});STAGES.forEach(function(s,i){BYCITY[s.city].push(i)});
 /*END*/
 
 /* ---------- 저장 ---------- */
@@ -424,12 +617,11 @@ try{var raw=localStorage.getItem('cubegame2.v2');if(raw){var o=JSON.parse(raw);i
 function persist(){try{localStorage.setItem('cubegame2.v2',JSON.stringify(save))}catch(e){}}
 
 /* ---------- 열림 규칙 ---------- */
-// 앞 도시에서 이 상징물을 여는 상징물: 같은 레벨, 없으면 그보다 낮은 것 가운데 가장 높은 레벨, 그것도 없으면 가장 낮은 것
+// 앞 도시에서 이 상징물을 여는 기준 상징물: 같은 레벨, 없으면 그보다 낮은 것 가운데 가장 높은 레벨, 그것도 없으면 가장 낮은 것
 function gate(i){var s=STAGES[i];if(s.city===0)return -1;var prev=BYCITY[s.city-1],best=-1;
   prev.forEach(function(j){if(STAGES[j].level<=s.level)best=j});return best<0?prev[0]:best}
-function before(i){var list=BYCITY[STAGES[i].city],p=list.indexOf(i);return p>0?list[p-1]:-1} // 같은 도시의 바로 아래 레벨
-var chkMask=null; // 열림 규칙 점검(?check=unlock)에서만 쓰는 가상의 진행 상태
-function done(i){return chkMask!=null?!!(chkMask>>i&1):!!save.cleared[STAGES[i].id]}
+var chk=null; // 열림 규칙 점검(?check=unlock)에서만 쓰는 가상의 진행 상태
+function done(i){return chk?!!chk[i]:!!save.cleared[STAGES[i].id]}
 // 열림: 서울의 첫 상징물이거나, 같은 도시의 다른 상징물을 하나라도 성공했거나(아래 레벨이든 위 레벨이든),
 // 앞 도시에서 기준 레벨(gate) 이상의 상징물을 성공했을 때. 도시의 첫 상징물은 앞 도시에서 하나만 성공해도 열린다
 function isOpen(i){if(tune.unlock_all||done(i))return true;var s=STAGES[i],list=BYCITY[s.city];
@@ -438,14 +630,18 @@ function isOpen(i){if(tune.unlock_all||done(i))return true;var s=STAGES[i],list=
   if(s.city===0)return false;var prev=BYCITY[s.city-1],gl=STAGES[gate(i)].level;
   if(list[0]===i)return prev.some(done); // 앞 도시에서 하나라도 성공하면 다음 도시의 첫 상징물이 열린다
   return prev.some(function(j){return done(j)&&STAGES[j].level>=gl})}
-// 점검: 갈 수 있는 모든 진행 상태를 돌며, 다 깨기 전에 열린 상징물이 하나도 없는 막힌 상태가 있는지 센다
-function checkUnlock(){var N=STAGES.length,full=(1<<N)-1,seen=new Uint8Array(1<<N),q=[0],states=0,stuck=[],low=0,fwd=0,same=0,i;seen[0]=1;
-  while(q.length){var m=q.pop();states++;chkMask=m;var open=[];for(i=0;i<N;i++)if(!(m>>i&1)&&isOpen(i))open.push(i);
-    if(!open.length&&m!==full&&stuck.length<5)stuck.push(m);if(!open.length&&m!==full)low++;
-    for(var c=0;c<CITIES.length-1;c++)if(BYCITY[c].some(done)&&!BYCITY[c+1].some(isOpen))fwd++; // 한 도시에서 성공했는데 다음 도시가 통째로 잠긴 경우
-    for(i=0;i<N;i++)if(done(i)&&!BYCITY[STAGES[i].city].every(isOpen))same++; // 성공한 도시 안에 잠긴 상징물이 남은 경우
-    for(i=0;i<open.length;i++){var n=m|1<<open[i];if(!seen[n]){seen[n]=1;q.push(n)}}}
-  chkMask=null;return 'unlock-check states='+states+' reached-full='+seen[full]+' stuck='+low+' next-city-locked='+fwd+' same-city-locked='+same+(stuck.length?' e.g. '+stuck.map(function(m){return STAGES.filter(function(_,j){return m>>j&1}).map(function(s){return s.id}).join('+')}).join(' | '):'')}
+// 점검: 열린 상징물 가운데 아무거나 골라 깨는 진행을 여러 번 되풀이하며, 다 깨기 전에 막히는 상태가 있는지 센다
+function checkUnlock(){var N=STAGES.length,r=rng(2024),runs=300,states=0,stuck=0,fwd=0,same=0,full=0,i,lv={};
+  STAGES.forEach(function(s){lv[s.level]=(lv[s.level]||0)+1});
+  for(var run=0;run<runs;run++){chk=[];var n=0;
+    while(true){states++;var open=[];for(i=0;i<N;i++)if(!chk[i]&&isOpen(i))open.push(i);
+      for(var c=0;c<CITIES.length-1;c++)if(BYCITY[c].some(done)&&!BYCITY[c+1].some(isOpen))fwd++; // 한 도시에서 성공했는데 다음 도시가 통째로 잠긴 경우
+      for(i=0;i<N;i++)if(chk[i]&&!BYCITY[STAGES[i].city].every(isOpen))same++;                    // 성공한 도시 안에 잠긴 상징물이 남은 경우
+      if(!open.length){if(n===N)full++;else stuck++;break}
+      // 진행 방식을 섞는다: 아무거나, 가장 앞 도시부터, 가장 뒤 도시부터
+      var pick=run%3===0?open[Math.floor(r()*open.length)]:run%3===1?open[Math.floor(r()*Math.min(3,open.length))]:open[open.length-1-Math.floor(r()*Math.min(3,open.length))];
+      chk[pick]=1;n++}}
+  chk=null;return 'unlock-check stages='+N+' cities='+CITIES.length+' per-level='+[1,2,3,4,5,6,7,8,9,10].map(function(l){return lv[l]||0}).join('/')+' runs='+runs+' states='+states+' finished='+full+' stuck='+stuck+' next-city-locked='+fwd+' same-city-locked='+same}
 function nextOpen(){for(var i=0;i<STAGES.length;i++)if(isOpen(i)&&!done(i))return i;return -1}
 function doneCount(){var n=0;for(var i=0;i<STAGES.length;i++)if(done(i))n++;return n}
 
@@ -732,10 +928,39 @@ var SONGS=[
        0,1,74,2,77,1,81,2,79,1,77,1, 76,3,72,1,76,2,74,1,72,1, 71,2,71,1,72,1,74,2,76,2, 72,2,69,2,69,4],
    [[40,4],[45,3],[40,4],[45,3],[38,3],[45,3],[40,4],[45,3]])];
 var musSong=null;
+// 더한 나라의 곡. 독일·미국·멕시코는 전래·저작권이 끝난 가락, 나머지 나라는 그 지역 음계로 지어 낸 가락(나라마다 다른 씨앗)
+var SONG_AT={'대한민국':0,'일본':1,'중국':2,'태국':3,'인도':4,'튀르키예':5,'그리스':6,'이탈리아':7,'스페인':8,'프랑스':9,'네덜란드':10,'영국':11,'러시아':12};
+var SONG_MORE={
+ // 독일: 환희의 송가 (베토벤 교향곡 9번, 1824)
+ '독일':song([76,2,76,2,77,2,79,2, 79,2,77,2,76,2,74,2, 72,2,72,2,74,2,76,2, 76,3,74,1,74,4, 76,2,76,2,77,2,79,2, 79,2,77,2,76,2,74,2, 72,2,72,2,74,2,76,2, 74,3,72,1,72,4],
+   [[48,4],[43,4],[48,4],[43,4],[48,4],[43,4],[48,4],[48,4]],{tempo:.85}),
+ // 미국: 양키 두들 (전래)
+ '미국':song([72,1,72,1,74,1,76,1,72,1,76,1,74,1,67,1, 72,1,72,1,74,1,76,1,72,2,71,2, 72,1,72,1,74,1,76,1,77,1,76,1,74,1,72,1, 71,1,67,1,69,1,71,1,72,2,72,2],
+   [[48,4],[48,4],[48,4],[43,4]],{tempo:.95}),
+ // 멕시코: 라 쿠카라차 (전래)
+ '멕시코':song([72,1,72,1,72,1,77,3,81,2, 72,1,72,1,72,1,77,3,81,2, 77,1,77,1,76,1,76,1,74,1,74,1,72,2, 72,1,72,1,72,1,76,3,79,2, 72,1,72,1,72,1,76,3,79,2, 84,1,86,1,84,1,82,1,81,1,79,1,77,2],
+   [[41,4],[41,4],[48,4],[48,4],[48,4],[41,4]],{tempo:1})};
+var PENT=[0,2,4,7,9],MINP=[0,3,5,7,10],HIJ=[0,1,4,5,7,8,10],MAJ=[0,2,4,5,7,9,11],MIN=[0,2,3,5,7,8,10],HARM=[0,2,3,5,7,8,11],PELOG=[0,1,3,7,8];
+var SONG_GEN={'대만':[PENT,62,{tempo:.8,lead:'triangle',drum:1}],'베트남':[PENT,65,{tempo:.75,lead:'triangle',drum:1}],'캄보디아':[PELOG,60,{tempo:.8,lead:'triangle',drum:1,th:7}],
+ '말레이시아':[PENT,67,{tempo:.9}],'싱가포르':[MAJ,60,{}],'인도네시아':[PELOG,62,{tempo:.8,lead:'triangle',drum:1,th:7}],'호주':[MAJ,65,{tempo:.95}],
+ '네팔':[MINP,62,{tempo:.75,lead:'triangle',drum:1,th:3}],'우즈베키스탄':[HIJ,62,{tempo:.9,lead:'sawtooth'}],'아랍에미리트':[HIJ,60,{tempo:.85,lead:'sawtooth'}],
+ '요르단':[HIJ,64,{tempo:.8,lead:'sawtooth'}],'이집트':[HIJ,57,{tempo:.9,lead:'sawtooth'}],'남아프리카 공화국':[PENT,60,{tempo:1.05}],'말리':[MINP,64,{th:3}],
+ '모로코':[HIJ,65,{tempo:.95,lead:'sawtooth'}],'포르투갈':[HARM,62,{th:3,tempo:.8,lead:'triangle',drum:1}],'오스트리아':[MAJ,62,{bar:6,tempo:.9,drum:1}],
+ '헝가리':[HARM,64,{th:3,tempo:1.05}],'벨기에':[MAJ,65,{tempo:.95}],'아이슬란드':[MIN,62,{th:3,tempo:.7,lead:'triangle',drum:1}],'캐나다':[MAJ,67,{tempo:.9}],
+ '에콰도르':[MINP,64,{th:3,tempo:.9,lead:'triangle'}],'페루':[MINP,62,{th:3,tempo:.95,lead:'triangle'}],'볼리비아':[MINP,60,{th:3,tempo:.85,lead:'triangle'}],
+ '칠레':[PENT,60,{tempo:.7,lead:'triangle',drum:1}],'아르헨티나':[HARM,62,{th:3,tempo:.8,lead:'sawtooth'}],'브라질':[MAJ,65,{tempo:1.1}]};
+function genSong(seed,sc,root,o){var r=rng(seed),mel=[],n=sc.length,deg=n+2,B=o.bar||8,b,left,th=o.th||4,cr=root-12;
+  function note(d){return root+12*Math.floor(d/n)+sc[((d%n)+n)%n]}
+  for(b=0;b<8;b++){left=B;if(b===7){mel.push(note(n),left);break}
+    while(left>0){var len=Math.min(left,r()<.45?1:r()<.8?2:3);deg+=Math.floor(r()*5)-2;deg=Math.max(n-1,Math.min(2*n+2,deg));mel.push(note(deg),len);left-=len}}
+  return song(mel,th===7?[[cr,7]]:[[cr,th],[cr,th],[cr+5,th],[cr,th],[cr+7,th===3?3:4],[cr,th],[cr+5,th],[cr,th]],o)}
+function songOf(s){var c=CITIES[s.city].country;if(SONG_AT[c]!=null)return SONGS[SONG_AT[c]];
+  if(!SONG_MORE[c]){var gdef=SONG_GEN[c];if(!gdef)return MAP_SONG;var seed=0,i;for(i=0;i<c.length;i++)seed=seed*31+c.charCodeAt(i)|0;SONG_MORE[c]=genSong(seed,gdef[0],gdef[1],gdef[2])}
+  return SONG_MORE[c]}
 // 편성: 리드(+옥타브), 마림바 아르페지오, 베이스, 패드, 벨, 드럼. 상징물을 깎는 동안에는 그 나라의 곡이 나온다
 function musicTick(){
   if(!AC||!soundOn||AC.state!=='running')return;
-  var sg=mode==='play'&&SONGS[STAGES[cur].city]||MAP_SONG;if(sg!==musSong){musSong=sg;musStep=0;musT=0}
+  var sg=mode==='play'&&songOf(STAGES[cur])||MAP_SONG;if(sg!==musSong){musSong=sg;musStep=0;musT=0}
   var sd=60/(tune.music_tempo*sg.tempo)/4,B=sg.bar*2,len=sg.g.length*2,three=sg.bar===6;if(musT<AC.currentTime)musT=AC.currentTime+.05;
   while(musT<AC.currentTime+.4){var s=musStep%len,b=s%B,ch=sg.ch[Math.floor(s/B)%sg.ch.length],root=ch[0],th=ch[1],t=musT;
     if(s%2===0){var m=sg.g[s>>1];if(m&&m[0]){var ld=sd*(2*m[1]+1.2);mnote(sg.lead,mf(m[0]),t,ld,sg.lead==='sawtooth'?.2:.3);mnote('triangle',mf(m[0]+12),t,ld*.7,.2)}} // 리드
@@ -945,74 +1170,42 @@ function showResult(ok,info){
 }
 
 /* ---------- 세계지도 (목록) ---------- */
-// 땅 모양: 경도 1.5도 × 위도 1.5도짜리 칸(처음보다 4배 촘촘함). 줄마다 땅인 경도 구간 [서쪽, 동쪽] 묶음.
-// 첫 줄이 북위 65~63.5도, 한 줄 내려갈 때마다 1.5도 남쪽. 칸의 가운데 경도가 구간 안에 들면 땅이다
-var LAND=[
- [[10,21],[23.5,35.5],[40,150]],
- [[5.5,17.5],[21.5,150]],
- [[5,17.2],[21.5,150]],
- [[5.3,18.7],[30,150]],
- [[-5.3,-3.2],[6,8.3],[11.3,16.7],[23.5,139.5]],
- [[-6.2,-2.2],[8.2,10.5],[12.5,16.5],[21,137.5]],
- [[-8,-6],[-5,-1.6],[8.2,12.5],[13,14.3],[21,135.5]],
- [[-10,-6],[-3,0],[7,140.5],[142,143.3]],
- [[-10,-6.2],[-4.5,1.7],[4.5,141],[142,143.3]],
- [[-4.5,.2],[1.8,140.5],[142.1,143.5]],
- [[-1.8,140.3],[142,144.5]],
- [[-4.5,139],[142,143.2]],
- [[-1.2,30.5],[32.5,35],[38.5,48.5],[53,138],[141.8,143.5]],
- [[-1.2,12.3],[14.5,28.8],[33.5,35.5],[37.5,47],[50.3,58.5],[61,136.3],[141.8,143.5]],
- [[-9,3.2],[5.3,6.7],[10.5,13.7],[16.3,28],[40.2,47.5],[51.5,134.5],[140.3,145.5]],
- [[-8.8,3.2],[12.2,16],[19.5,28],[33,35.2],[41.6,48.5],[52.5,130.3],[140,141.3]],
- [[-8.8,.2],[8.1,9.9],[15,18.3],[19.4,24],[26.2,50],[53,120.5],[122,128.8],[139.9,141.9]],
- [[-9.4,.2],[8.1,9.9],[15.8,17],[20.8,24.2],[26.5,49],[53.8,117.7],[121.2,122.3],[125.2,128.2],[139.6,141.6]],
- [[-8.9,-1.6],[9.3,10.3],[12.5,15.5],[21.4,24.1],[27.3,50],[53.8,122.4],[126.4,129.3],[136.7,141]],
- [[-.5,10.8],[23.6,26.2],[35.9,120],[126.5,129.5],[134.5,140.8]],
- [[-6.7,10.6],[32.4,34.4],[35.7,120.2],[126.4,128.6],[130.9,138.3]],
- [[-8.8,15.1],[20.3,23],[34.9,120.9],[129.5,131.9],[133.5,134.5]],
- [[-9.7,17],[20,121.8],[130.2,131.4]],
- [[-10,48.6],[50.3,122]],
- [[-12,48.6],[51.2,121.4]],
- [[-12,34],[36,50],[54,120]],
- [[-12,34.8],[37.2,51.6],[55.3,56.4],[57.8,119.3],[121,122]],
- [[-12,35.5],[38.5,58.8],[68.5,117.4],[120.2,121.6]],
- [[-12,36.9],[39,59.7],[69,114.3],[120.3,121]],
- [[-12,37.2],[39.8,58.5],[70.5,87],[92.7,106.8],[109.7,110.5]],
- [[-12,37.4],[41,57.7],[72.8,84.9],[93.8,105.8],[108.7,110.9]],
- [[-12,38.5],[41.8,56],[73.1,83.4],[94.5,106.5],[120.4,122.2]],
- [[-12,39.2],[42.8,52.3],[73.4,81.5],[94.3,108.2],[119.9,122.2]],
- [[-12,40],[42.9,49.5],[74.2,80.1],[97.8,109],[120.1,122]],
- [[-12,42.6],[43.4,45.5],[74.7,80.3],[98.4,109.3],[120.6,121.5],[123,124]],
- [[-12,43.3],[48.5,51.2],[75.5,79.8],[98.7,99.7],[102.9,109.2],[122,123.2],[124.3,125.7]]];
-// 유럽은 도시가 촘촘해서 경도 45도 서쪽을 가로로 3배 늘려 그린다. u는 경도 3도(아시아 쪽)의 화면 너비, 세로는 1.4배
-var CELL=1.5,MAP_COLS=108,EU=38,EUW=3,VH=1.4,mapU=0;
-function colX(c,u){return (c<EU?c*EUW:EU*EUW+(c-EU))*u/2}
-function cityXY(ct,u){return {x:colX((ct.lon+12)/CELL,u)+(ct.dx||0)*u,y:(65-ct.lat)/CELL*VH*u/2+(ct.dy||0)*VH*u}}
-function isLand(r,c){var row=LAND[r];if(!row)return false;var lon=-12+(c+.5)*CELL;for(var i=0;i<row.length;i++)if(lon>=row[i][0]&&lon<=row[i][1])return true;return false}
-function drawMap(u){
-  var cv=$('mapCv'),ch=VH*u/2,w=Math.ceil(colX(MAP_COLS,u)),h=Math.ceil(LAND.length*ch),g=cv.getContext('2d'),r,c,rr=rng(321);
-  cv.width=w;cv.height=h;cv.style.width=w+'px';cv.style.height=h+'px';$('map').style.width=w+'px';$('map').style.height=h+'px';
-  g.fillStyle='#6fbfe8';g.fillRect(0,0,w,h);
-  g.fillStyle='#86cdf0';for(r=0;r<70;r++)g.fillRect(Math.floor(rr()*w),Math.floor(rr()*h),u*.7,3); // 잔물결
-  for(r=0;r<LAND.length;r++)for(c=0;c<MAP_COLS;c++){if(!isLand(r,c))continue;
-    var x=Math.floor(colX(c,u)),x2=Math.floor(colX(c+1,u)),y=Math.floor(r*ch),y2=Math.floor((r+1)*ch),j=Math.floor(rr()*3),lon=-12+(c+.5)*CELL;
-    // 북쪽은 눈빛, 아프리카·아라비아는 모래빛, 나머지는 풀빛
-    g.fillStyle=r<=3?['#e4efe6','#d7e8dc','#cfe3d6'][j]:(r>=20&&lon<62)?['#ecd595','#e6cc85','#f1dca2'][j]:['#7fcf74','#74c56a','#8ad67f'][j];
-    g.fillRect(x,y,x2-x,y2-y);
-    if(!isLand(r+1,c)){g.fillStyle='rgba(27,34,54,.28)';g.fillRect(x,y2-3,x2-x,3)}} // 바닷가 그늘
+// 땅 모양은 map.js(Natural Earth 1:50m, 퍼블릭 도메인)에서 온다: 경도·위도 0.75도 칸, 서경 170도~동경 180도, 북위 72도~남위 56도
+var MAPD=window.MAP,MAP_COLS=MAPD.cols,LANDROWS=MAPD.rows.map(function(s){return s?s.split(',').map(function(t){var a=t.split('-');return [+a[0],a.length>1?+a[1]:+a[0]]}):[]});
+var PX=4,mapW=MAP_COLS*PX,mapH=LANDROWS.length*PX,mz=0,mtx=0,mty=0,mapDrawn=false; // PX: 칸 하나의 기본 화면 크기. mz 확대 배율, mtx·mty 위치
+function cityXY(ct){return {x:(ct.lon-MAPD.lon0)/MAPD.res*PX,y:(MAPD.lat0-ct.lat)/MAPD.res*PX}}
+function isLand(r,c){var row=LANDROWS[r];if(!row)return false;for(var i=0;i<row.length;i++)if(c>=row[i][0]&&c<=row[i][1])return true;return false}
+function drawMap(){
+  var cv=$('mapCv'),g=cv.getContext('2d'),r,c,rr=rng(321),map=$('map');
+  cv.width=mapW;cv.height=mapH;cv.style.width=mapW+'px';cv.style.height=mapH+'px';map.style.width=mapW+'px';map.style.height=mapH+'px';
+  g.fillStyle='#6fbfe8';g.fillRect(0,0,mapW,mapH);
+  g.fillStyle='#86cdf0';for(r=0;r<160;r++)g.fillRect(Math.floor(rr()*mapW),Math.floor(rr()*mapH),10,1); // 잔물결
+  for(r=0;r<LANDROWS.length;r++)LANDROWS[r].forEach(function(run){for(c=run[0];c<=run[1];c++){
+    var j=Math.floor(rr()*3),lat=MAPD.lat0-(r+.5)*MAPD.res,lon=MAPD.lon0+(c+.5)*MAPD.res;
+    // 북쪽은 눈빛, 사하라·아라비아·호주 안쪽은 모래빛, 나머지는 풀빛
+    var sand=(lat>14&&lat<33&&lon>-17&&lon<60)||(lat>-31&&lat<-19&&lon>118&&lon<142);
+    g.fillStyle=lat>63?['#e4efe6','#d7e8dc','#cfe3d6'][j]:sand?['#ecd595','#e6cc85','#f1dca2'][j]:['#7fcf74','#74c56a','#8ad67f'][j];
+    g.fillRect(c*PX,r*PX,PX,PX);
+    if(!isLand(r+1,c)){g.fillStyle='rgba(27,34,54,.3)';g.fillRect(c*PX,r*PX+PX-1,PX,1)}}}); // 바닷가 그늘
   // 정복 길: 도시를 순서대로 잇는 점선
-  g.setLineDash([2,9]);g.lineCap='round';g.lineWidth=4;g.strokeStyle='rgba(27,34,54,.55)';g.beginPath();
-  CITIES.forEach(function(ct,i){var p=cityXY(ct,u);if(i)g.lineTo(p.x,p.y);else g.moveTo(p.x,p.y)});g.stroke();g.setLineDash([]);
+  g.setLineDash([1,4]);g.lineCap='round';g.lineWidth=1.5;g.strokeStyle='rgba(27,34,54,.55)';g.beginPath();
+  CITIES.forEach(function(ct,i){var p=cityXY(ct);if(i)g.lineTo(p.x,p.y);else g.moveTo(p.x,p.y)});g.stroke();g.setLineDash([]);
 }
+// 지도 보기: 화면보다 작아지지 않게 배율과 위치를 가두고, 핀은 배율과 상관없이 비슷한 크기로 보이게 거꾸로 줄인다
+function mapZmin(){var w=$('mapWrap');return Math.max((w.clientWidth||1)/mapW,(w.clientHeight||1)/mapH)}
+function mapClamp(){var w=$('mapWrap'),vw=w.clientWidth||1,vh=w.clientHeight||1,m=$('map');mz=Math.max(mapZmin(),Math.min(12,mz));
+  mtx=Math.min(0,Math.max(vw-mapW*mz,mtx));mty=Math.min(0,Math.max(vh-mapH*mz,mty));
+  m.style.transform='translate('+mtx+'px,'+mty+'px) scale('+mz+')';m.style.setProperty('--inv',Math.max(.4,Math.min(1,mz/3.6))/mz);
+  m.classList.toggle('far',mz<2.6)}
+function mapZoomAt(f,cx,cy){var z0=mz;mz=Math.max(mapZmin(),Math.min(12,mz*f));var k=mz/z0;mtx=cx-(cx-mtx)*k;mty=cy-(cy-mty)*k;mapClamp()}
 function cityState(ci){var list=BYCITY[ci],d=0,o=0;list.forEach(function(i){if(done(i))d++;else if(isOpen(i))o++});
   return {done:d,open:o,total:list.length,cls:d===list.length?'done':o?'open':d?'part':'locked'}}
 function buildMap(){
-  var wrap=$('mapWrap'),map=$('map'),u=Math.max(18,Math.min(30,Math.floor((wrap.clientHeight||520)/(LAND.length*VH/2))));
-  if(u!==mapU){mapU=u;drawMap(u)}
+  var wrap=$('mapWrap'),map=$('map');if(!mapDrawn){mapDrawn=true;drawMap()}
   Array.prototype.forEach.call(map.querySelectorAll('.city'),function(n){n.remove()});
   var target=nextOpen(),focus=null;if(target<0)target=STAGES.length-1;
-  CITIES.forEach(function(ct,ci){var p=cityXY(ct,u),stt=cityState(ci),el=document.createElement('div');
-    el.className='city '+stt.cls;el.style.left=Math.round(p.x)+'px';el.style.top=Math.round(p.y)+'px';
+  CITIES.forEach(function(ct,ci){var p=cityXY(ct),stt=cityState(ci),el=document.createElement('div');
+    el.className='city '+stt.cls;el.style.left=p.x+'px';el.style.top=p.y+'px';
     // 세워진 상징물: 간단한 움직임을 되풀이한다
     var built=document.createElement('div');built.className='built';
     BYCITY[ci].forEach(function(i,k){if(!done(i))return;var s=STAGES[i],b=document.createElement('span'),cv=document.createElement('canvas'),sp=document.createElement('i');
@@ -1025,7 +1218,9 @@ function buildMap(){
     [built,pin,nm].forEach(function(x){x.addEventListener('click',function(){if(mapMoved>8)return;audio();openCity(ci)})});
     map.appendChild(el);if(STAGES[target].city===ci)focus=p});
   freshId='';
-  if(focus){wrap.scrollLeft=Math.max(0,focus.x-wrap.clientWidth/2);wrap.scrollTop=Math.max(0,focus.y-wrap.clientHeight/2)}
+  if(!mz)mz=4;
+  if(focus){mtx=wrap.clientWidth/2-focus.x*mz;mty=wrap.clientHeight/2-focus.y*mz}
+  mapClamp();
 }
 function openCity(ci){
   var ct=CITIES[ci],list=$('cityList');list.innerHTML='';
@@ -1044,11 +1239,19 @@ var why='';if(!open){var pc=CITIES[ci-1].name;why=BYCITY[ci][0]===i?pc+'의 상�
 $('btnUnlock').addEventListener('click',function(){var on=!CONFIG.unlock_all.value;CONFIG.unlock_all.value=on?1:0;this.setAttribute('aria-pressed',on?'true':'false');this.textContent=on?'🔒 다시 잠그기':'🔓 모두 열기';audio();openMenu()});
 $('btnCityClose').addEventListener('click',function(){$('cityCard').hidden=true});
 $('cityCard').addEventListener('click',function(e){if(e.target===this)this.hidden=true});
-// 마우스로는 지도를 끌어서 움직인다(손가락은 그냥 밀면 된다). 끌었으면 도시가 눌리지 않게 한다
-var mapDrag=null,mapMoved=0;
-$('mapWrap').addEventListener('pointerdown',function(e){mapMoved=0;if(e.pointerType==='mouse')mapDrag={x:e.clientX,y:e.clientY}});
-window.addEventListener('pointermove',function(e){if(!mapDrag)return;var w=$('mapWrap'),dx=e.clientX-mapDrag.x,dy=e.clientY-mapDrag.y;mapMoved+=Math.abs(dx)+Math.abs(dy);w.scrollLeft-=dx;w.scrollTop-=dy;mapDrag.x=e.clientX;mapDrag.y=e.clientY});
-window.addEventListener('pointerup',function(){mapDrag=null});
+// 지도 움직이기: 한 손가락(마우스)으로 끌어 이동, 두 손가락을 벌리거나 오므려 확대·축소, 마우스 휠과 ＋－ 단추도 된다. 끌었으면 도시가 눌리지 않는다
+var mpts=new Map(),mpinch=null,mapMoved=0;
+function mpinchState(){var a=[];mpts.forEach(function(p){a.push(p)});var dx=a[0].x-a[1].x,dy=a[0].y-a[1].y;return {d:Math.max(20,Math.sqrt(dx*dx+dy*dy)),x:(a[0].x+a[1].x)/2,y:(a[0].y+a[1].y)/2}}
+function mrel(e){var b=$('mapWrap').getBoundingClientRect();return {x:e.clientX-b.left,y:e.clientY-b.top}}
+$('mapWrap').addEventListener('pointerdown',function(e){if(mpts.size===0)mapMoved=0;mpts.set(e.pointerId,mrel(e));if(mpts.size===2){mpinch=mpinchState();mapMoved=99}});
+window.addEventListener('pointermove',function(e){var p=mpts.get(e.pointerId);if(!p)return;var q=mrel(e),dx=q.x-p.x,dy=q.y-p.y;p.x=q.x;p.y=q.y;
+  if(mpts.size>=2&&mpinch){var s=mpinchState();mtx+=s.x-mpinch.x;mty+=s.y-mpinch.y;mapZoomAt(s.d/mpinch.d,s.x,s.y);mpinch=s;return}
+  mapMoved+=Math.abs(dx)+Math.abs(dy);if(mapMoved>4){mtx+=dx;mty+=dy;mapClamp()}});
+function mup(e){mpts.delete(e.pointerId);if(mpts.size<2)mpinch=null}
+window.addEventListener('pointerup',mup);window.addEventListener('pointercancel',mup);
+$('mapWrap').addEventListener('wheel',function(e){e.preventDefault();var q=mrel(e);mapZoomAt(e.deltaY>0?.85:1.18,q.x,q.y)},{passive:false});
+function mzBtn(id,f){$(id).addEventListener('pointerdown',function(e){e.stopPropagation()});$(id).addEventListener('click',function(){var w=$('mapWrap');mapZoomAt(f,w.clientWidth/2,w.clientHeight/2)})}
+mzBtn('mapZin',1.5);mzBtn('mapZout',1/1.5);
 function openMenu(){
   mode='menu';state='idle';runId++;clearLocks();$('btnZoom').hidden=true;$('btnPeek').hidden=true;$('hud').hidden=true;$('divider').hidden=true;$('hint').hidden=true;$('result').hidden=true;$('cityCard').hidden=true;$('menu').hidden=false;
   $('menuScore').textContent=save.score;$('mapProg').textContent=doneCount()+'/'+STAGES.length;
@@ -1091,7 +1294,7 @@ function layout(){
     camD=G.R/Math.sin(Math.min(fv,Math.atan(Math.tan(fv)*(W/bh))))*0.95;
     camTop=G.RA/Math.sin(Math.min(fv,Math.atan(Math.tan(fv)*(W/th))))*1.0}
   cam.aspect=W/bh;cam.updateProjectionMatrix();
-  if(mode==='menu'&&mapU)buildMap();
+  if(mode==='menu'&&mapDrawn)mapClamp();
 }
 window.addEventListener('resize',layout);
 if(window.ResizeObserver)new ResizeObserver(layout).observe(app);
@@ -1140,6 +1343,13 @@ function frame(now){
 }
 openMenu();
 if(/[?&]check=unlock/.test(location.search)){var co=document.createElement('pre');co.id='checkOut';co.textContent=checkUnlock();document.body.appendChild(co)}
+// 점검: ?check=models 는 모든 상징물 모델을 한 장에 그려 모양과 큐브 수를 보여 준다
+if(/[?&]check=models/.test(location.search)){var sheet=document.createElement('div');sheet.id='modelSheet';
+  sheet.style.cssText='position:absolute;inset:0;z-index:9;background:#2c3566;overflow:auto;display:grid;grid-template-columns:repeat(10,1fr);gap:4px;padding:6px;font:11px sans-serif;color:#fff';
+  var bad=[];STAGES.forEach(function(s,i){var d=document.createElement('div'),cv=document.createElement('canvas'),n=0;cv.width=cv.height=120;cv.style.cssText='width:100%;display:block';
+    try{var vx=s.build();n=vx.m.size;drawIso(cv,vx);genStage(i)}catch(err){bad.push(s.id+': '+err.message)}
+    d.appendChild(cv);d.appendChild(document.createTextNode((i+1)+' '+s.name+' L'+s.level+' ('+n+')'));sheet.appendChild(d)});
+  document.body.appendChild(sheet);var mo=document.createElement('pre');mo.id='checkOut';mo.textContent='model-check stages='+STAGES.length+' errors='+bad.length+(bad.length?' '+bad.join(' | '):'');document.body.appendChild(mo)}
 requestAnimationFrame(frame);
 })();
 </script>
