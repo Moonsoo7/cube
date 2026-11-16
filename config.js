@@ -36,7 +36,7 @@ window.CONFIG = {
   memory_peek: { value: 2, min: 0.5, max: 5, step: 0.5 },     // 기억: 하트 1개로 다시 보는 시간(초)
   time_mult_memory: { value: 0.875, min: 0.3, max: 2, step: 0.025 }, // 기억 스테이지 제한 시간 배수 (1.25에서 30% 줄임)
   time_mult_regrow: { value: 0.7, min: 0.3, max: 2, step: 0.05 },  // 재생 스테이지 제한 시간 배수 (30% 줄임)
-  regrow_interval: { value: 5, min: 1, max: 10, step: 0.5 },  // 재생: 다시 자라는 간격(초). 4초에서 20% 느리게
+  regrow_interval: { value: 6.5, min: 1, max: 12, step: 0.5 }, // 재생: 다시 자라는 간격(초). 5초에서 30% 늘림
   bomb_count: { value: 3, min: 1, max: 8, step: 1 },          // 폭탄: 기본 폭탄 수(레벨 4마다 1개씩 늘어남)
 
   // 화면·소리
