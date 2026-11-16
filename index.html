@@ -428,10 +428,24 @@ function persist(){try{localStorage.setItem('cubegame2.v2',JSON.stringify(save))
 function gate(i){var s=STAGES[i];if(s.city===0)return -1;var prev=BYCITY[s.city-1],best=-1;
   prev.forEach(function(j){if(STAGES[j].level<=s.level)best=j});return best<0?prev[0]:best}
 function before(i){var list=BYCITY[STAGES[i].city],p=list.indexOf(i);return p>0?list[p-1]:-1} // 같은 도시의 바로 아래 레벨
-function done(i){return !!save.cleared[STAGES[i].id]}
-// 열림: 서울의 첫 상징물, 같은 도시의 아래 레벨을 성공, 또는 앞 도시의 같은 레벨을 성공
-function isOpen(i){if(tune.unlock_all||done(i))return true;var b=before(i),g=gate(i);
-  return (b<0&&g<0)||(b>=0&&done(b))||(g>=0&&done(g))}
+var chkMask=null; // 열림 규칙 점검(?check=unlock)에서만 쓰는 가상의 진행 상태
+function done(i){return chkMask!=null?!!(chkMask>>i&1):!!save.cleared[STAGES[i].id]}
+// 열림: 서울의 첫 상징물이거나, 같은 도시의 다른 상징물을 하나라도 성공했거나(아래 레벨이든 위 레벨이든),
+// 앞 도시에서 기준 레벨(gate) 이상의 상징물을 성공했을 때. 도시의 첫 상징물은 앞 도시에서 하나만 성공해도 열린다
+function isOpen(i){if(tune.unlock_all||done(i))return true;var s=STAGES[i],list=BYCITY[s.city];
+  if(s.city===0&&list[0]===i)return true;
+  if(list.some(function(j){return j!==i&&done(j)}))return true;
+  if(s.city===0)return false;var prev=BYCITY[s.city-1],gl=STAGES[gate(i)].level;
+  if(list[0]===i)return prev.some(done); // 앞 도시에서 하나라도 성공하면 다음 도시의 첫 상징물이 열린다
+  return prev.some(function(j){return done(j)&&STAGES[j].level>=gl})}
+// 점검: 갈 수 있는 모든 진행 상태를 돌며, 다 깨기 전에 열린 상징물이 하나도 없는 막힌 상태가 있는지 센다
+function checkUnlock(){var N=STAGES.length,full=(1<<N)-1,seen=new Uint8Array(1<<N),q=[0],states=0,stuck=[],low=0,fwd=0,same=0,i;seen[0]=1;
+  while(q.length){var m=q.pop();states++;chkMask=m;var open=[];for(i=0;i<N;i++)if(!(m>>i&1)&&isOpen(i))open.push(i);
+    if(!open.length&&m!==full&&stuck.length<5)stuck.push(m);if(!open.length&&m!==full)low++;
+    for(var c=0;c<CITIES.length-1;c++)if(BYCITY[c].some(done)&&!BYCITY[c+1].some(isOpen))fwd++; // 한 도시에서 성공했는데 다음 도시가 통째로 잠긴 경우
+    for(i=0;i<N;i++)if(done(i)&&!BYCITY[STAGES[i].city].every(isOpen))same++; // 성공한 도시 안에 잠긴 상징물이 남은 경우
+    for(i=0;i<open.length;i++){var n=m|1<<open[i];if(!seen[n]){seen[n]=1;q.push(n)}}}
+  chkMask=null;return 'unlock-check states='+states+' reached-full='+seen[full]+' stuck='+low+' next-city-locked='+fwd+' same-city-locked='+same+(stuck.length?' e.g. '+stuck.map(function(m){return STAGES.filter(function(_,j){return m>>j&1}).map(function(s){return s.id}).join('+')}).join(' | '):'')}
 function nextOpen(){for(var i=0;i<STAGES.length;i++)if(isOpen(i)&&!done(i))return i;return -1}
 function doneCount(){var n=0;for(var i=0;i<STAGES.length;i++)if(done(i))n++;return n}
 
@@ -1019,7 +1033,7 @@ function openCity(ci){
   BYCITY[ci].forEach(function(i){var s=STAGES[i],open=isOpen(i),d=done(i),b=document.createElement('button'),cv=document.createElement('canvas');
     b.className='lm'+(d?' done':open?' open':' locked');cv.width=cv.height=96;drawIso(cv,s.build());b.appendChild(cv);
     var tx=document.createElement('span');tx.className='lt';
-    var why='';if(!open){var need=[before(i),gate(i)].filter(function(j){return j>=0}).map(function(j){return '「'+STAGES[j].name+'」'});why=need.join(' 또는 ')+' 성공하면 열립니다'}
+var why='';if(!open){var pc=CITIES[ci-1].name;why=BYCITY[ci][0]===i?pc+'의 상징물을 하나 성공하면 열립니다':'이 도시의 다른 상징물이나 '+pc+'의 레벨 '+STAGES[gate(i)].level+' 이상 상징물을 성공하면 열립니다'}
     tx.innerHTML='<b></b><span class="lv">레벨 '+s.level+(modeLabel(s)?' · '+modeLabel(s):'')+'</span><span class="ls"></span>';
     tx.querySelector('b').textContent=s.name;tx.querySelector('.ls').textContent=d?'✓ 세워짐 · 다시 하기':open?'도전하기':'🔒 '+why;
     b.appendChild(tx);b.disabled=!open;
@@ -1125,6 +1139,7 @@ function frame(now){
   }else{renderer.setScissorTest(false);renderer.setViewport(0,0,W,H);renderer.clear()}
 }
 openMenu();
+if(/[?&]check=unlock/.test(location.search)){var co=document.createElement('pre');co.id='checkOut';co.textContent=checkUnlock();document.body.appendChild(co)}
 requestAnimationFrame(frame);
 })();
 </script>
