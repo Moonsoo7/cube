@@ -1,0 +1,4 @@
+browser	/c/Program Files/Google/Chrome/Application/chrome.exe
+time	2026-11-16 13:48:28
+render	cheap
+not_assessed	the browser stopped without a picture (exit 21); no headless shell to try (npx playwright install chromium-headless-shell)
